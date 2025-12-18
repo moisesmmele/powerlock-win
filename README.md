@@ -32,8 +32,8 @@ When enabled, PowerLock imposes the following restrictions:
 
 *   **Multi-User Context**: Restrictions (Adapters/Hosts) are applied with granular "Deny" rules for the *specific user* selected at runtime, allowing other administrators to remain unrestricted if intended.
 *   **Persistent State Tracking**: Modifications are tracked in the Registry (`HKLM:\SOFTWARE\PowerLock`), allowing the script to cleanly undo *only* the changes it made.
-*   **Dead-Man's Hand (Auto-Recovery)**: 
-    *   Upon locking, a "Dead-Man's Hand" timer is set (default 60 mins).
+*   **Auto-Recovery**: 
+    *   Upon locking, an Auto-Recovery timer is set (default 60 mins).
     *   A Scheduled Task (`PowerLock_Recovery`) is registered to run as **SYSTEM**.
     *   This task automatically triggers a headless recovery script (`recovery.ps1`) at the designated time, unlocking the system if you are unable to do so manually.
 
@@ -72,7 +72,7 @@ When enabled, PowerLock imposes the following restrictions:
 ## Recovery
 
 If you are locked out:
-1.  **Wait**: The Dead-Man's Hand timer (set during setup) will automatically unlock the system eventually.
+1.  **Wait**: The Auto-Recovery timer (set during setup) will automatically unlock the system eventually.
 2.  **Manual Recovery**: If the timer fails or was disabled manually, log in with the **Backup Administrator Account** ensuring you have one enabled, and manually run `recovery.ps1` as SYSTEM (requires PsExec or Task Scheduler intervention) or simply use `main.ps1` to Disable restrictions if the backup admin was not restricted.
 
 ## Disclaimer

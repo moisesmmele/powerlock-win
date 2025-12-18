@@ -83,12 +83,12 @@ function Enable-Restrictions {
         }
     }
 
-    # 1. Dead-Man's Hand Configuration
-    Write-Host "`n--- DEAD-MAN'S HAND CONFIGURATION ---" -ForegroundColor Cyan
+    # 1. Auto-Recovery Configuration
+    Write-Host "`n--- AUTO-RECOVERY CONFIGURATION ---" -ForegroundColor Cyan
     Write-Host "This timer will automatically trigger the Emergency Recovery script (""recovery.ps1"")"
     Write-Host "at the specified time to unlock the system if you are unable to do so manually."
     
-    $durationStr = Read-Host "Enter Dead-Man's Hand Timer in MINUTES (default: 60)"
+    $durationStr = Read-Host "Enter Auto-Recovery Timer in MINUTES (default: 60)"
     if ([string]::IsNullOrWhiteSpace($durationStr)) { $durationStr = "60" }
     
     try {
@@ -108,8 +108,8 @@ function Enable-Restrictions {
     $unlockTime = $startTime.AddMinutes($durationMinutes)
     Write-Host "System will be locked until: $unlockTime" -ForegroundColor Yellow
 
-    # Schedule Recovery Task (Dead-Man's Hand)
-    Write-Host "[*] Scheduling Dead-Man's Hand (Recovery Task)..." -ForegroundColor Cyan
+    # Schedule Recovery Task
+    Write-Host "[*] Scheduling Auto-Recovery Task..." -ForegroundColor Cyan
     try {
         $recoveryScript = Join-Path $ScriptRoot "recovery.ps1"
         $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File ""$recoveryScript"""
@@ -155,7 +155,7 @@ function Disable-Restrictions {
     Clear-PowerLockState -User $User
 
     # Remove Scheduled Task if exists
-    Write-Host "[*] Removing Dead-Man's Hand Task..."
+    Write-Host "[*] Removing Auto-Recovery Task..."
     try {
         Unregister-ScheduledTask -TaskName "PowerLock_Recovery" -Confirm:$false -ErrorAction SilentlyContinue
     }

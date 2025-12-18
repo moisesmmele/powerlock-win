@@ -2,6 +2,10 @@
 # This script Orchestrates the application of restrictions using modular components.
 # Warning: This script is agressive. Use with caution, might break your system.
 
+param(
+    [switch]$SkipConfirmation
+)
+
 # --- SCRIPT CONFIGURATION ---
 
 # Define the path to the Modules directory relative to this script
@@ -271,6 +275,27 @@ function Disable-SystemRestrictions {
     }
 }
 
+function Get-UserWarningConfirmation {
+    param([switch]$SkipConfirmation)
+
+    if ($SkipConfirmation) {
+        Write-Host "Skipping confirmation as requested." -ForegroundColor DarkGray
+        return $true
+    }
+
+    Write-Host "`n--- READ CAREFULLY ---" -ForegroundColor Red
+    Write-Host "This script acts aggressively to lock down system features." -ForegroundColor Yellow
+    Write-Host "It has the potential to break system functionality or lock you out if not managed correctly."
+    Write-Host "To bypass or reverse these restrictions, you will likely need a SECONDARY Administrator account,"
+    Write-Host "as your current user might be restricted from performing recovery actions."
+    
+    $confirmation = Read-Host "`nDo you understand the risks and wish to proceed? (Type 'YES' to confirm)"
+    if ($confirmation -eq 'YES') { 
+        return $true
+    }
+    return $false
+}
+
 function Invoke-PreflightChecks {
     <#
     .DESCRIPTION
@@ -289,68 +314,18 @@ function Invoke-PreflightChecks {
     }
 
     # 2. Risk Warning & Confirmation
-    Write-Host "`n--- READ CAREFULLY ---" -ForegroundColor Red
-    Write-Host "This script acts aggressively to lock down system features." -ForegroundColor Yellow
-    Write-Host "It has the potential to break system functionality or lock you out if not managed correctly."
-    Write-Host "To bypass or reverse these restrictions, you will likely need a SECONDARY Administrator account,"
-    Write-Host "as your current user might be restricted from performing recovery actions."
-    
-    $confirmation = Read-Host "`nDo you understand the risks and wish to proceed? (Type 'YES' to confirm)"
-    if ($confirmation -ne 'YES') { 
+    if (-not (Get-UserWarningConfirmation -SkipConfirmation $SkipConfirmation)) {
         Write-Host "Operation cancelled by user."
-        exit 
-    }
-
-    # 3. Backup Administrator Account Check
-    Write-Host "`n[*] Checking for Backup Administrator Account..." -ForegroundColor Cyan
-    try {
-        # Find built-in Administrator by SID (ends in -500) to support all languages (e.g., 'Administrator', 'Administrador')
-        $adminAccount = Get-LocalUser | Where-Object { $_.SID.Value -match "-500$" } | Select-Object -First 1
-        
-        if (-not $adminAccount) {
-            Write-Warning "Could not identify the built-in Administrator account by SID. Trying standard name 'Administrator'..."
-            $adminAccount = Get-LocalUser -Name "Administrator"
-        }
-
-        if (-not $adminAccount.Enabled) {
-            Write-Host "The built-in Administrator account ('$($adminAccount.Name)') is currently DISABLED." -ForegroundColor Yellow
-            Write-Host "It is HIGHLY RECOMMENDED to enable this account as your emergency backup."
-            
-            $enableAdmin = Read-Host "Do you want to enable the '$($adminAccount.Name)' account and set a password? (y/n)"
-            if ($enableAdmin -eq 'y') {
-                Write-Host "`n--- PASSWORD SETUP ---" -ForegroundColor Cyan
-                Write-Host "Please choose a STRONG password (random, lengthy, and challenging)."
-                Write-Host "IMPORTANT: Write this password down on PHYSICAL PAPER and store it safely." -ForegroundColor Red
-                Write-Host "If you lose this password, you may effectively lose control of this machine while locked."
-                
-                while ($true) {
-                    $pass1 = Read-Host "Enter new password for '$($adminAccount.Name)'" -AsSecureString
-                    $pass2 = Read-Host "Verify password" -AsSecureString
-                    
-                    if ((ConvertFrom-SecureString $pass1) -eq (ConvertFrom-SecureString $pass2)) {
-                        Set-LocalUser -Name $adminAccount.Name -Password $pass1 -Description "PowerLock Backup Admin"
-                        Enable-LocalUser -Name $adminAccount.Name
-                        Write-Host "[SUCCESS] Backup Administrator account ('$($adminAccount.Name)') enabled." -ForegroundColor Green
-                        break
-                    }
-                    else {
-                        Write-Warning "Passwords did not match. Please try again."
-                    }
-                }
-            }
-            else {
-                Write-Warning "Proceeding without a dedicated backup admin account is extremely risky."
-                Start-Sleep -Seconds 2
-            }
-        }
-        else {
-            Write-Host "[OK] Backup Administrator account ('$($adminAccount.Name)') is already enabled." -ForegroundColor Green
-        }
-    }
-    catch {
-        Write-Error "Failed to query local accounts. Ensure you are running on a compatible Windows version."
-        Write-Error $_
         exit
+    }
+
+    # 3. Secondary Administrator Account Check
+    $escalationCreds = Initialize-SecondaryAdmin
+
+    if ($escalationCreds) {
+        # Auto-Escalation: Use the credentials we just got to switch context
+        if ($PSCommandPath) { $scriptPath = $PSCommandPath } else { $scriptPath = $MyInvocation.MyCommand.Definition }
+        Invoke-Escalation -CredentialDetails $escalationCreds -ScriptPath $scriptPath
     }
 }
 

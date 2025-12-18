@@ -76,10 +76,13 @@ function Unblock-RegistryWrite {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$RegistryPath
+        [string]$RegistryPath,
+
+        [Parameter(Mandatory = $false)]
+        [string]$UserAccount
     )
 
-    Write-Verbose "Unblocking write access to registry path: $RegistryPath"
+    Write-Verbose "Unblocking access to registry path: $RegistryPath (User: $(if($UserAccount){$UserAccount}else{'ALL'}))"
 
     # Similar hive parsing
     $hive = $null
@@ -109,9 +112,22 @@ function Unblock-RegistryWrite {
             $rules = $acl.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
             
             foreach ($rule in $rules) {
+                # Filter by Deny rule
                 if ($rule.AccessControlType -eq "Deny") { 
-                    $acl.RemoveAccessRule($rule) 
-                    Write-Verbose "Removed Deny rule for user $($rule.IdentityReference)"
+                    # If UserAccount is specified, check identity match
+                    if ($UserAccount) {
+                        # Clean up identity strings for comparison (e.g. "HOSTNAME\User" vs "User")
+                        # Simple match: check if the rule identity contains the requested username
+                        if ($rule.IdentityReference.Value -like "*$UserAccount") {
+                            $acl.RemoveAccessRule($rule) 
+                            Write-Verbose "Removed Deny rule for specific user $($rule.IdentityReference)"
+                        }
+                    }
+                    else {
+                        # No specific user, remove all Deny rules (Legacy/Emergency Unblock)
+                        $acl.RemoveAccessRule($rule) 
+                        Write-Verbose "Removed Deny rule for user $($rule.IdentityReference)"
+                    }
                 }
             }
             $key.SetAccessControl($acl)
@@ -160,7 +176,10 @@ function Unblock-FileWrite {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$FilePath
+        [string]$FilePath,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$UserAccount
     )
 
     if (-not (Test-Path $FilePath)) {
@@ -174,11 +193,19 @@ function Unblock-FileWrite {
         
         foreach ($rule in $rules) {
             if ($rule.AccessControlType -eq "Deny") { 
-                $acl.RemoveAccessRule($rule)
+                if ($UserAccount) {
+                    if ($rule.IdentityReference.Value -like "*$UserAccount") {
+                        $acl.RemoveAccessRule($rule)
+                        Write-Verbose "Unblocked file for specific user: $UserAccount"
+                    }
+                }
+                else {
+                    $acl.RemoveAccessRule($rule)
+                    Write-Verbose "Unblocked file access (Global Deny removal)"
+                }
             }
         }
         Set-Acl $FilePath $acl
-        Write-Verbose "Unblocked write access to file: $FilePath"
     }
     catch {
         Write-Error "Failed to unlock file '$FilePath': $_"

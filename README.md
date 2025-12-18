@@ -1,3 +1,7 @@
+> **⚠️ AI-GENERATED CODE DISCLAIMER**
+> This project was developed with the assistance of Gemini/Antigravity, and for personal use. 
+> **USE AT YOUR OWN RISK.** Thoroughly review the code before execution.
+
 # PowerLock: System Restriction Tool
 
 PowerLock is a PowerShell-based utility designed to "hard lock" specific Windows system features. It is intended for power users who want to enforce strict focus or security policies by increasing the friction required to change system settings.

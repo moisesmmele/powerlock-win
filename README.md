@@ -5,7 +5,6 @@
 >
 > Please review the code thoroughly before execution.
 
-
 # PowerLock: System Restriction Tool
 
 PowerLock is a PowerShell-based utility designed to "hard lock" specific Windows system features. It is intended for power users who want to enforce strict focus or security policies by increasing the friction required to change system settings.
@@ -30,7 +29,8 @@ When enabled, PowerLock imposes the following restrictions:
 
 ### Smart Safety Mechanisms
 
-*   **Multi-User Context**: Restrictions (Adapters/Hosts) are applied with granular "Deny" rules for the *specific user* selected at runtime, allowing other administrators to remain unrestricted if intended.
+*   **Context-Aware Execution**: The script forces you to run as a **Secondary Administrator** to apply restrictions to a *different* target user. This prevents you from accidentally locking the keys inside the car (locking your own active admin session).
+*   **Auto-Escalation**: If you lack a secondary admin account, the script can help you enable the built-in Administrator, set a password, and automatically restart itself in that context.
 *   **Persistent State Tracking**: Modifications are tracked in the Registry (`HKLM:\SOFTWARE\PowerLock`), allowing the script to cleanly undo *only* the changes it made.
 *   **Auto-Recovery**: 
     *   Upon locking, an Auto-Recovery timer is set (default 60 mins).
@@ -44,12 +44,12 @@ When enabled, PowerLock imposes the following restrictions:
 
 ## Project Structure
 
-*   `main.ps1`: The primary interactive CLI. Orchestrates user selection, backup creation, and restriction logic.
+*   `main.ps1`: The primary interactive CLI. Orchestrates preflight checks, escalation, and the main menu.
 *   `Modules/`:
-    *   `NetworkUtils.psm1`: Adapter discovery and selection.
-    *   `SystemRestrictions.psm1`: Core locking primitives (ACL management).
+    *   `NetworkUtils.psm1`: Adapter discovery and registry locking logic.
+    *   `SystemRestrictions.psm1`: Core locking primitives (ACL management) and system policies.
     *   `StateManager.psm1`: Registry-based state tracking logic.
-    *   `UserUtils.psm1`: interactive user selection.
+    *   `UserUtils.psm1`: Handles user selection, admin account verification, and process escalation.
 *   `recovery.ps1`: Headless "Emergency Eject" script designed to run via Scheduled Task.
 
 ## Usage
@@ -60,20 +60,22 @@ When enabled, PowerLock imposes the following restrictions:
     ```powershell
     .\main.ps1
     ```
-4.  **Preflight Checks**: The script will:
-    -   Verify Admin privileges.
-    -   Check for a generic "Administrator" backup account.
-    -   Create a **System Restore Point**.
-5.  **Target Selection**: You will be prompted to select which Local User Account to restrict.
+4.  **Preflight & Escalation**:
+    -   The script verifies if you are running as a suitable Secondary Administrator.
+    -   If not, it will prompt you to enable/create one and will **automatically restart** itself as that user once credentials are provided.
+5.  **Target Selection**: You will be prompted to select which *other* Local User Account to restrict.
 6.  **Menu**:
-    -   Select `1` to **Enable Restrictions**. (Requires configuring the Dead-Man's Hand timer).
-    -   Select `2` to **Disable Restrictions** (Restore defaults and unregister recovery task).
+    -   Select `1` to **Enable Restrictions**. (Requires configuring the Auto-Recovery timer).
+    -   Select `2` to **Disable Restrictions** (Restores defaults and unregisters recovery task).
 
 ## Recovery
 
 If you are locked out:
 1.  **Wait**: The Auto-Recovery timer (set during setup) will automatically unlock the system eventually.
-2.  **Manual Recovery**: If the timer fails or was disabled manually, log in with the **Backup Administrator Account** ensuring you have one enabled, and manually run `recovery.ps1` as SYSTEM (requires PsExec or Task Scheduler intervention) or simply use `main.ps1` to Disable restrictions if the backup admin was not restricted.
+2.  **Manual Recovery**: If the timer fails or was disabled manually:
+    -   Log in with the **Secondary Administrator Account**.
+    -   Run `main.ps1` and select "Disable Restrictions".
+    -   (Advanced) Run `recovery.ps1` as SYSTEM using Task Scheduler or PsExec.
 
 ## Disclaimer
 

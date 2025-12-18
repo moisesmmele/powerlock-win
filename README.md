@@ -5,7 +5,7 @@ PowerLock is a PowerShell-based utility designed to "hard lock" specific Windows
 **⚠️ WARNING: EXTREME CAUTION REQUIRED**
 This tool is aggressive. It modifies file permissions (ACLs) and Registry policies to prevent changes. **Improper use can lock you out of critical system functions (like Network Settings or Registry Editor).**
 - Always ensure you have a **Backup Administrator Account** enabled before applying restrictions.
-- You typically need a *secondary* administrator account to remove these restrictions if your main account is locked out.
+- You will need a *secondary* administrator account to remove these restrictions if your main account is locked out.
 
 ## Features
 
@@ -36,13 +36,6 @@ When enabled, PowerLock imposes the following restrictions:
 5.  **Menu**:
     -   Select `1` to **Enable Restrictions**.
     -   Select `2` to **Disable Restrictions** (Restore defaults).
-
-## File Structure
-
-- `main.ps1`: The entry point and controller script.
-- `Modules/`:
-    -   `NetworkUtils.psm1`: Methods to identify network modules.
-    -   `SystemRestrictions.psm1`: Core logic for modifying Registry/File permissions (ACLs).
 
 ## Disclaimer
 

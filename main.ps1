@@ -13,6 +13,7 @@ $ModulesPath = Join-Path $ScriptRoot "Modules"
 try {
     Import-Module (Join-Path $ModulesPath "NetworkUtils.psm1") -Force -ErrorAction Stop
     Import-Module (Join-Path $ModulesPath "SystemRestrictions.psm1") -Force -ErrorAction Stop
+    Import-Module (Join-Path $ModulesPath "StateManager.psm1") -Force -ErrorAction Stop
 }
 catch {
     Write-Error "Failed to import required modules. Please ensure 'NetworkUtils.psm1' and 'SystemRestrictions.psm1' exist in the 'Modules' folder."
@@ -51,23 +52,27 @@ function Start-RestrictionEnforcement {
     foreach ($adapter in $adapters) {
         $guid = $adapter.InterfaceGuid
         Write-Host "[*] Locking Network Interface: $($adapter.Name)"
-        # Note: We pass the standard registry path format our module expects for HKLM subkeys
         $regPath = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
         
         Block-RegistryWrite -RegistryPath $regPath -UserAccount $currentUser
+        Set-PowerLockState -Category "NetworkAdapters" -Key $guid -Value 1
     }
 
     # 3. Hosts File Restriction
     Write-Host "[*] Locking Hosts File..."
     Block-FileWrite -FilePath $HostsFilePath -UserAccount $currentUser
+    Set-PowerLockState -Category "SystemFiles" -Key "HostsFile" -Value 1
 
     # 4. Registry Editor Restriction
     Write-Host "[*] Disabling Registry Editor..."
     Set-RegistryValue -Path $RegEditPolicyPath -Name $RegEditValueName -Value 1
+    Set-PowerLockState -Category "SystemTools" -Key "RegEdit" -Value 1
 
     # 5. UAC Restriction
     Write-Host "[*] Enforcing UAC..."
     Set-RegistryValue -Path $UacRegistryPath -Name $UacValueName -Value 1
+    # Move UAC state to Root Config as it is an enforcement policy, not just a transient restriction
+    Set-PowerLockConfig -Key "UacEnforced" -Value 1
 
     Write-Host "`n[SUCCESS] Restrictions Applied." -ForegroundColor Yellow
 }
@@ -78,38 +83,48 @@ function Stop-RestrictionEnforcement {
         Orchestrates the disabling of system restrictions.
     #>
     
-    # 1. Select Adapters (to know which to unlock)
-    Write-Host "Select adapters to UNLOCK:"
-    try {
-        $adapters = Select-TargetAdapters
-    }
-    catch {
-        Write-Error $_
-        return
-    }
-
     Write-Host "`n--- DEACTIVATING RESTRICTIONS ---" -ForegroundColor Magenta
-
-    # 2. Network Restrictions
-    foreach ($adapter in $adapters) {
-        $guid = $adapter.InterfaceGuid
-        Write-Host "[*] Unlocking Network Interface: $($adapter.Name)"
-        $regPath = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
-        
-        Unblock-RegistryWrite -RegistryPath $regPath
+    
+    # 1. Unlock Adapters (From State)
+    $adapterState = Get-PowerLockState -Category "NetworkAdapters"
+    if ($adapterState.Count -gt 0) {
+        foreach ($guid in $adapterState.Keys) {
+            Write-Host "[*] Unlocking Network Interface (GUID: $guid)..." 
+            # We don't have the friendly name here easily unless we query Get-NetAdapter again, 
+            # but for unlocking, the GUID is what we need.
+            $regPath = "SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\$guid"
+            Unblock-RegistryWrite -RegistryPath $regPath
+        }
+    }
+    else {
+        Write-Warning "No locked adapters found in state."
     }
 
-    # 3. Hosts File Restriction
-    Write-Host "[*] Unlocking Hosts File..."
-    Unblock-FileWrite -FilePath $HostsFilePath
+    # 2. Hosts File Restriction
+    if (Test-PowerLockState -Category "SystemFiles" -Key "HostsFile") {
+        Write-Host "[*] Unlocking Hosts File..."
+        Unblock-FileWrite -FilePath $HostsFilePath
+    }
 
-    # 4. Registry Editor Restriction
-    Write-Host "[*] Enabling Registry Editor..."
-    Set-RegistryValue -Path $RegEditPolicyPath -Name $RegEditValueName -Value 0
+    # 3. Registry Editor Restriction
+    if (Test-PowerLockState -Category "SystemTools" -Key "RegEdit") {
+        Write-Host "[*] Enabling Registry Editor..."
+        Set-RegistryValue -Path $RegEditPolicyPath -Name $RegEditValueName -Value 0
+    }
 
-    # 5. UAC Restriction
-    Write-Host "[*] Restoring UAC Defaults..."
-    Set-RegistryValue -Path $UacRegistryPath -Name $UacValueName -Value 5
+    # 4. UAC Restriction
+    if (Get-PowerLockConfig -Key "UacEnforced") {
+        Write-Host "[*] Restoring UAC Defaults..."
+        Set-RegistryValue -Path $UacRegistryPath -Name $UacValueName -Value 5
+        # Optionally Config could remain 1 if we want to "remember" we enforced it, 
+        # but logically we are stopping enforcement, so we might want to clear or set to 0.
+        # Given the request was to move it out of ActiveRestrictions, we'll treat it as a config setting.
+        # If we "Stop", we disable the config.
+        Set-PowerLockConfig -Key "UacEnforced" -Value 0
+    }
+
+    # Clear Global State
+    Clear-PowerLockState
 
     Write-Host "`n[SUCCESS] Restrictions Removed." -ForegroundColor Green
 }

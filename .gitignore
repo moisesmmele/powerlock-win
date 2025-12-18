@@ -1,0 +1,38 @@
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# MacOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# PowerShell
+*.log
+*.clixml
+# Credentials/Secrets (Safety first)
+*_Credential.xml
+*_secret.xml
+*.ps1xml
+!*.Format.ps1xml
+!*.Types.ps1xml
+
+# Modules - Assuming 'Modules' in root is source code, so NOT ignoring it.
+# If you download modules to a specific folder, add it here.
+# /output/
+
+# Pester / Test Results
+TestResults.xml
+/*.xml
+!*.ps1xml
+
+# Temporary files
+*.tmp

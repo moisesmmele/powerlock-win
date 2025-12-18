@@ -17,7 +17,7 @@ PowerLock is a PowerShell-based utility designed to "hard lock" specific Windows
 > **Improper use can lock you out of critical system functions (like Network Settings or Registry Editor).**
 >
 > - Always ensure you have a **Backup Administrator Account** enabled before applying restrictions.
-> - You will need a *secondary* administrator account to remove these restrictions if your main account is locked out.
+> - The script creates a **System Restore Point** for safety, but manual backups are encouraged.
 
 ## Features
 
@@ -28,10 +28,29 @@ When enabled, PowerLock imposes the following restrictions:
 3.  **Registry Editor**: Disables `regedit.exe` via Group Policy settings.
 4.  **UAC (User Account Control)**: Enforces UAC to the highest notification level.
 
+### Smart Safety Mechanisms
+
+*   **Multi-User Context**: Restrictions (Adapters/Hosts) are applied with granular "Deny" rules for the *specific user* selected at runtime, allowing other administrators to remain unrestricted if intended.
+*   **Persistent State Tracking**: Modifications are tracked in the Registry (`HKLM:\SOFTWARE\PowerLock`), allowing the script to cleanly undo *only* the changes it made.
+*   **Dead-Man's Hand (Auto-Recovery)**: 
+    *   Upon locking, a "Dead-Man's Hand" timer is set (default 60 mins).
+    *   A Scheduled Task (`PowerLock_Recovery`) is registered to run as **SYSTEM**.
+    *   This task automatically triggers a headless recovery script (`recovery.ps1`) at the designated time, unlocking the system if you are unable to do so manually.
+
 ## Prerequisites
 
 - **OS**: Windows 10/11 (PowerShell 5.1+)
 - **Privileges**: Must be run as **Administrator**.
+
+## Project Structure
+
+*   `main.ps1`: The primary interactive CLI. Orchestrates user selection, backup creation, and restriction logic.
+*   `Modules/`:
+    *   `NetworkUtils.psm1`: Adapter discovery and selection.
+    *   `SystemRestrictions.psm1`: Core locking primitives (ACL management).
+    *   `StateManager.psm1`: Registry-based state tracking logic.
+    *   `UserUtils.psm1`: interactive user selection.
+*   `recovery.ps1`: Headless "Emergency Eject" script designed to run via Scheduled Task.
 
 ## Usage
 
@@ -41,13 +60,20 @@ When enabled, PowerLock imposes the following restrictions:
     ```powershell
     .\main.ps1
     ```
-4.  **Preflight Checks**: The script will automatically:
+4.  **Preflight Checks**: The script will:
     -   Verify Admin privileges.
-    -   Warn you about the risks.
-    -   Check for a built-in "Administrator" account. If it is disabled, the script will guide you through enabling it and setting a strong password for emergency recovery.
-5.  **Menu**:
-    -   Select `1` to **Enable Restrictions**.
-    -   Select `2` to **Disable Restrictions** (Restore defaults).
+    -   Check for a generic "Administrator" backup account.
+    -   Create a **System Restore Point**.
+5.  **Target Selection**: You will be prompted to select which Local User Account to restrict.
+6.  **Menu**:
+    -   Select `1` to **Enable Restrictions**. (Requires configuring the Dead-Man's Hand timer).
+    -   Select `2` to **Disable Restrictions** (Restore defaults and unregister recovery task).
+
+## Recovery
+
+If you are locked out:
+1.  **Wait**: The Dead-Man's Hand timer (set during setup) will automatically unlock the system eventually.
+2.  **Manual Recovery**: If the timer fails or was disabled manually, log in with the **Backup Administrator Account** ensuring you have one enabled, and manually run `recovery.ps1` as SYSTEM (requires PsExec or Task Scheduler intervention) or simply use `main.ps1` to Disable restrictions if the backup admin was not restricted.
 
 ## Disclaimer
 
